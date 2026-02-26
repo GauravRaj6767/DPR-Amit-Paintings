@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { transcribeAudio, extractReportData } from "@/lib/gemini"
 import { downloadMediaBuffer } from "@/lib/whatsapp"
+import { uploadImage } from "@/lib/storage"
 
 // GET — called by Vercel cron every minute
 // POST — can be called manually for testing
@@ -147,6 +148,39 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
       if (insertError) {
         console.error(`[trigger] Failed to insert daily log for ${phoneNumber}:`, insertError.message)
         continue
+      }
+
+      // Fetch the log_id we just upserted so we can attach media files
+      const { data: logRow } = await supabase
+        .from("daily_logs")
+        .select("log_id")
+        .eq("site_id", supervisor.site_id)
+        .eq("report_date", today)
+        .single()
+
+      // Download and store any images from this batch
+      if (logRow?.log_id) {
+        const imageMessages = messages.filter((m) => m.message_type === "image" && m.media_url)
+        let imgIndex = 0
+        for (const imgMsg of imageMessages) {
+          try {
+            const media = await downloadMediaBuffer(imgMsg.media_url)
+            if (!media) continue
+            const publicUrl = await uploadImage(media.buffer, media.mimeType, logRow.log_id, imgIndex)
+            if (publicUrl) {
+              await supabase.from("media_files").insert({
+                log_id: logRow.log_id,
+                file_url: publicUrl,
+                file_type: "image",
+                mime_type: media.mimeType,
+              })
+              imgIndex++
+            }
+          } catch (imgErr) {
+            console.error(`[trigger] Failed to process image for ${phoneNumber}:`, imgErr)
+            // Don't abort — continue with other images and buffer cleanup
+          }
+        }
       }
 
       // Delete processed buffer rows

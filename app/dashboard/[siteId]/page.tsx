@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import type { Site, DailyLog } from "@/types"
+import type { Site, DailyLog, MediaFile } from "@/types"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { DeleteLogButton } from "@/components/DeleteLogButton"
+import { PhotoGrid } from "@/components/PhotoGrid"
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -29,7 +30,21 @@ async function getSiteData(siteId: string) {
     .gte("report_date", from)
     .order("report_date", { ascending: false })
 
-  return { site: site as Site, logs: (logs ?? []) as DailyLog[] }
+  // Fetch media files for today's log (if any)
+  const today = new Date().toISOString().split("T")[0]
+  const todayLog = (logs ?? []).find((l) => l.report_date === today)
+  let todayImages: MediaFile[] = []
+  if (todayLog) {
+    const { data: mediaFiles } = await supabase
+      .from("media_files")
+      .select("*")
+      .eq("log_id", todayLog.log_id)
+      .eq("file_type", "image")
+      .order("created_at", { ascending: true })
+    todayImages = (mediaFiles ?? []) as MediaFile[]
+  }
+
+  return { site: site as Site, logs: (logs ?? []) as DailyLog[], todayImages }
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -46,7 +61,7 @@ function InfoRow({ label, value, accent }: { label: string; value: string | null
   )
 }
 
-function TodayCard({ log }: { log: DailyLog }) {
+function TodayCard({ log, images }: { log: DailyLog; images: MediaFile[] }) {
   const hasIssue = !!log.issues_flagged
   const hasMaterials = !!log.materials_needed
 
@@ -116,6 +131,8 @@ function TodayCard({ log }: { log: DailyLog }) {
             ))}
           </div>
         )}
+
+        <PhotoGrid images={images} />
       </div>
     </div>
   )
@@ -177,7 +194,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
   const data = await getSiteData(siteId)
   if (!data) notFound()
 
-  const { site, logs } = data
+  const { site, logs, todayImages } = data
   const today = new Date().toISOString().split("T")[0]
   const todayLog = logs.find((l) => l.report_date === today)
   const historyLogs = logs.filter((l) => l.report_date !== today)
@@ -229,7 +246,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
           </span>
         </div>
 
-        {todayLog ? <TodayCard log={todayLog} /> : <NoReportToday />}
+        {todayLog ? <TodayCard log={todayLog} images={todayImages} /> : <NoReportToday />}
 
         {/* History section */}
         {historyLogs.length > 0 && (
