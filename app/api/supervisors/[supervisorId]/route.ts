@@ -12,7 +12,7 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let body: { site_id?: string; name?: string }
+  let body: { site_id?: string | null; name?: string }
   try {
     body = await req.json()
   } catch {
@@ -20,7 +20,7 @@ export async function PATCH(
   }
 
   const updates: Record<string, unknown> = {}
-  if (body.site_id !== undefined) updates.site_id = body.site_id
+  if ("site_id" in body) updates.site_id = body.site_id ?? null
   if (body.name !== undefined) updates.name = body.name
 
   if (Object.keys(updates).length === 0) {

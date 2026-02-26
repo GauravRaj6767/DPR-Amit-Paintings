@@ -31,7 +31,8 @@ async function getSiteData(siteId: string) {
     .order("report_date", { ascending: false })
 
   // Fetch media files for today's log (if any)
-  const today = new Date().toISOString().split("T")[0]
+  // Use IST date — server runs in UTC, IST is UTC+5:30
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
   const todayLog = (logs ?? []).find((l) => l.report_date === today)
   let todayImages: MediaFile[] = []
   if (todayLog) {
@@ -85,7 +86,7 @@ function TodayCard({ log, images }: { log: DailyLog; images: MediaFile[] }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              {new Date(log.received_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              {new Date(log.received_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
             </span>
             <DeleteLogButton logId={log.log_id} label="Remove" />
           </div>
@@ -195,7 +196,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
   if (!data) notFound()
 
   const { site, logs, todayImages } = data
-  const today = new Date().toISOString().split("T")[0]
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
   const todayLog = logs.find((l) => l.report_date === today)
   const historyLogs = logs.filter((l) => l.report_date !== today)
 
@@ -242,7 +243,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
           </span>
           <div className="divider" style={{ flex: 1 }} />
           <span style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>
-            {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+            {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}
           </span>
         </div>
 

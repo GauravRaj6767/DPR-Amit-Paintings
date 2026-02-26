@@ -5,7 +5,7 @@ import { ThemeToggle } from "@/components/ThemeToggle"
 
 async function getSitesWithTodayStatus() {
   const supabase = await createClient()
-  const today = new Date().toISOString().split("T")[0]
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
 
   const { data: sites } = await supabase
     .from("sites")
@@ -109,7 +109,7 @@ function SiteCard({ site, log, index }: { site: Site; log: DailyLog | undefined;
 export default async function DashboardPage() {
   const entries = await getSitesWithTodayStatus()
   const today = new Date().toLocaleDateString("en-IN", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata",
   })
   const reportsToday = entries.filter((e) => !!e.log).length
   const issuesCount = entries.filter((e) => e.log?.issues_flagged).length

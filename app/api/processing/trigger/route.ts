@@ -125,7 +125,8 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
       const extracted = await extractReportData(combinedText)
 
       // Write to daily_logs (upsert by site+date in case cron runs twice)
-      const today = new Date().toISOString().split("T")[0]
+      // Use IST date — Vercel runs in UTC, IST is UTC+5:30
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
 
       const { error: insertError } = await supabase
         .from("daily_logs")

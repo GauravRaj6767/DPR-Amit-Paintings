@@ -9,7 +9,7 @@ export type Site = {
 
 export type Supervisor = {
   supervisor_id: string
-  site_id: string
+  site_id: string | null
   name: string | null
   phone_number: string
   created_at: string

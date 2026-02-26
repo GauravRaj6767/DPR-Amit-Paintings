@@ -167,13 +167,13 @@ function AddSupervisorForm({ sites }: { sites: Site[] }) {
 function SupervisorRow({ supervisor, sites }: { supervisor: Supervisor; sites: Site[] }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
-  const [selectedSite, setSelectedSite] = useState(supervisor.site_id)
+  const [selectedSite, setSelectedSite] = useState<string>(supervisor.site_id ?? '')
   const [editName, setEditName] = useState(supervisor.name ?? '')
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const currentSite = sites.find((s) => s.site_id === supervisor.site_id)
+  const currentSite = supervisor.site_id ? sites.find((s) => s.site_id === supervisor.site_id) : null
 
   async function handleSave() {
     setLoading(true)
@@ -181,7 +181,7 @@ function SupervisorRow({ supervisor, sites }: { supervisor: Supervisor; sites: S
       const res = await fetch(`/api/supervisors/${supervisor.supervisor_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ site_id: selectedSite, name: editName.trim() || null }),
+        body: JSON.stringify({ site_id: selectedSite || null, name: editName.trim() || null }),
       })
       if (!res.ok) throw new Error('Failed to update')
       setEditing(false)
@@ -235,6 +235,7 @@ function SupervisorRow({ supervisor, sites }: { supervisor: Supervisor; sites: S
                   onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
                   onBlur={(e) => (e.target.style.borderColor = 'var(--border-dim)')}
                 >
+                  <option value="">None (unassigned)</option>
                   {sites.map((s) => (
                     <option key={s.site_id} value={s.site_id}>{s.name}</option>
                   ))}
@@ -247,7 +248,7 @@ function SupervisorRow({ supervisor, sites }: { supervisor: Supervisor; sites: S
           </div>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
             <button
-              onClick={() => { setEditing(false); setSelectedSite(supervisor.site_id); setEditName(supervisor.name ?? '') }}
+              onClick={() => { setEditing(false); setSelectedSite(supervisor.site_id ?? ''); setEditName(supervisor.name ?? '') }}
               style={{ background: 'transparent', border: '1px solid var(--border-dim)', borderRadius: 6, padding: '6px 12px', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}
             >
               Cancel
@@ -277,12 +278,11 @@ function SupervisorRow({ supervisor, sites }: { supervisor: Supervisor; sites: S
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <span>{supervisor.phone_number}</span>
-              {currentSite && (
-                <>
-                  <span style={{ color: 'var(--text-faint)' }}>·</span>
-                  <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{currentSite.name}</span>
-                </>
-              )}
+              <span style={{ color: 'var(--text-faint)' }}>·</span>
+              {currentSite
+                ? <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{currentSite.name}</span>
+                : <span style={{ color: '#f87171', fontWeight: 500 }}>Unassigned</span>
+              }
             </div>
           </div>
 
@@ -344,9 +344,9 @@ export function SupervisorManager({ supervisors, sites }: { supervisors: Supervi
   const bySite = sites.map((site) => ({
     site,
     supervisors: supervisors.filter((s) => s.site_id === site.site_id),
-  }))
+  })).filter(({ supervisors: siteSups }) => siteSups.length > 0)
 
-  const unassigned = supervisors.filter((s) => !sites.find((site) => site.site_id === s.site_id))
+  const unassigned = supervisors.filter((s) => !s.site_id)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
