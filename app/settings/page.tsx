@@ -20,6 +20,7 @@ async function getSettingsData() {
   // Build a count of supervisors per site
   const supervisorCounts: Record<string, number> = {}
   for (const sup of allSupervisors) {
+    if (!sup.site_id) continue
     supervisorCounts[sup.site_id] = (supervisorCounts[sup.site_id] ?? 0) + 1
   }
 
