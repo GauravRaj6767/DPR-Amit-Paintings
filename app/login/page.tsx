@@ -32,7 +32,7 @@ export default function LoginPage() {
 
   return (
     <div className="bg-mesh" style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      {/* Theme toggle — top right */}
+      {/* Theme toggle — top right*/}
       <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50 }}>
         <ThemeToggle />
       </div>
