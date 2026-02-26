@@ -3,9 +3,13 @@ import Link from "next/link"
 import type { Site, DailyLog } from "@/types"
 import { ThemeToggle } from "@/components/ThemeToggle"
 
-async function getSitesWithTodayStatus() {
+async function getSitesWithStatus() {
   const supabase = await createClient()
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+  const from = sevenDaysAgo.toISOString().split("T")[0]
 
   const { data: sites } = await supabase
     .from("sites")
@@ -17,34 +21,54 @@ async function getSitesWithTodayStatus() {
 
   const siteIds = sites.map((s: Site) => s.site_id)
 
-  // Fetch all today's logs — there may be multiple per site (one per batch)
+  // Fetch last 7 days of logs for all sites — multiple rows per day are possible
   const { data: logs } = await supabase
     .from("daily_logs")
-    .select("*")
+    .select("site_id, report_date, received_at, summary, work_done, workers_present, issues_flagged, materials_needed")
     .in("site_id", siteIds)
-    .eq("report_date", today)
+    .gte("report_date", from)
     .order("received_at", { ascending: false })
 
   return sites.map((site: Site) => {
-    // Pick the most recent log for this site's card summary
     const siteLogs = (logs ?? []).filter((l: DailyLog) => l.site_id === site.site_id)
-    const log: DailyLog | undefined = siteLogs[0]
-    const logCount = siteLogs.length
-    return { site, log, logCount }
+    const todayLogs = siteLogs.filter((l) => l.report_date === today)
+    const latestLog: DailyLog | undefined = siteLogs[0]
+
+    // Build a combined overall summary from all 7-day log summaries (newest first)
+    const summaryLines = siteLogs
+      .map((l) => l.summary ?? l.work_done)
+      .filter(Boolean) as string[]
+    const overallSummary = summaryLines.length > 0 ? summaryLines.join(" · ") : null
+
+    // Status flags: check across all today's logs
+    const hasIssueToday = todayLogs.some((l) => !!l.issues_flagged)
+    const hasMaterialsToday = todayLogs.some((l) => !!l.materials_needed)
+    const workersToday = todayLogs.find((l) => l.workers_present != null)?.workers_present ?? null
+
+    return {
+      site,
+      latestLog,
+      todayCount: todayLogs.length,
+      overallSummary,
+      hasIssueToday,
+      hasMaterialsToday,
+      workersToday,
+    }
   })
 }
 
-function StatusDot({ log }: { log: DailyLog | undefined }) {
-  if (!log) return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--text-faint)", display: "inline-block" }} />
-  if (log.issues_flagged) return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block", boxShadow: "0 0 6px rgba(239,68,68,0.6)" }} />
-  if (log.materials_needed) return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", display: "inline-block", boxShadow: "0 0 6px rgba(245,158,11,0.5)" }} />
+type SiteEntry = Awaited<ReturnType<typeof getSitesWithStatus>>[number]
+
+function StatusDot({ hasIssue, hasMaterials, hasReport }: { hasIssue: boolean; hasMaterials: boolean; hasReport: boolean }) {
+  if (!hasReport) return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--text-faint)", display: "inline-block" }} />
+  if (hasIssue) return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block", boxShadow: "0 0 6px rgba(239,68,68,0.6)" }} />
+  if (hasMaterials) return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", display: "inline-block", boxShadow: "0 0 6px rgba(245,158,11,0.5)" }} />
   return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px rgba(34,197,94,0.5)" }} />
 }
 
-function SiteCard({ site, log, logCount, index }: { site: Site; log: DailyLog | undefined; logCount: number; index: number }) {
-  const hasReport = !!log
-  const hasIssue = hasReport && !!log.issues_flagged
-  const hasMaterials = hasReport && !!log.materials_needed
+function SiteCard({ entry, index }: { entry: SiteEntry; index: number }) {
+  const { site, latestLog, todayCount, overallSummary, hasIssueToday, hasMaterialsToday, workersToday } = entry
+  const hasReport = !!latestLog
   const delayClass = `delay-${Math.min(index, 7)}`
 
   return (
@@ -53,9 +77,9 @@ function SiteCard({ site, log, logCount, index }: { site: Site; log: DailyLog | 
         <div style={{
           position: "absolute", left: 0, top: 0, bottom: 0, width: 3,
           borderRadius: "14px 0 0 14px",
-          background: hasIssue
+          background: hasIssueToday
             ? "linear-gradient(180deg,#ef4444,#dc2626)"
-            : hasMaterials
+            : hasMaterialsToday
             ? "linear-gradient(180deg,#f59e0b,#d97706)"
             : hasReport
             ? "linear-gradient(180deg,#22c55e,#16a34a)"
@@ -77,12 +101,12 @@ function SiteCard({ site, log, logCount, index }: { site: Site; log: DailyLog | 
               )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {logCount > 1 && (
+              {todayCount > 1 && (
                 <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-dim)", background: "var(--bg-subtle)", border: "1px solid var(--border-dim)", borderRadius: 99, padding: "2px 7px" }}>
-                  {logCount} updates
+                  {todayCount} updates
                 </span>
               )}
-              <StatusDot log={log} />
+              <StatusDot hasIssue={hasIssueToday} hasMaterials={hasMaterialsToday} hasReport={hasReport} />
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: "var(--text-faint)" }}>
                 <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -92,17 +116,17 @@ function SiteCard({ site, log, logCount, index }: { site: Site; log: DailyLog | 
           {hasReport ? (
             <div>
               <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 12 }}>
-                {log.summary ?? log.work_done ?? "Report received"}
+                {overallSummary ?? "Reports received"}
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {log.workers_present != null && (
+                {workersToday != null && (
                   <span className="badge badge-neutral">
-                    👷 {log.workers_present} workers
+                    👷 {workersToday} workers
                   </span>
                 )}
-                {hasIssue && <span className="badge badge-issue">⚠ Issue flagged</span>}
-                {hasMaterials && <span className="badge badge-warn">◈ Materials needed</span>}
-                {!hasIssue && !hasMaterials && <span className="badge badge-ok">✓ All clear</span>}
+                {hasIssueToday && <span className="badge badge-issue">⚠ Issue flagged</span>}
+                {hasMaterialsToday && <span className="badge badge-warn">◈ Materials needed</span>}
+                {!hasIssueToday && !hasMaterialsToday && <span className="badge badge-ok">✓ All clear</span>}
               </div>
             </div>
           ) : (
@@ -115,12 +139,12 @@ function SiteCard({ site, log, logCount, index }: { site: Site; log: DailyLog | 
 }
 
 export default async function DashboardPage() {
-  const entries = await getSitesWithTodayStatus()
+  const entries = await getSitesWithStatus()
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata",
   })
-  const reportsToday = entries.filter((e) => !!e.log).length
-  const issuesCount = entries.filter((e) => e.log?.issues_flagged).length
+  const reportsToday = entries.filter((e) => !!e.latestLog).length
+  const issuesCount = entries.filter((e) => e.hasIssueToday).length
 
   return (
     <div className="bg-mesh" style={{ minHeight: "100dvh" }}>
@@ -207,8 +231,8 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {entries.map(({ site, log, logCount }, i) => (
-              <SiteCard key={site.site_id} site={site} log={log} logCount={logCount} index={i + 3} />
+            {entries.map((entry, i) => (
+              <SiteCard key={entry.site.site_id} entry={entry} index={i + 3} />
             ))}
           </div>
         )}

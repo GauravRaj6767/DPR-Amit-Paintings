@@ -23,10 +23,11 @@ export async function uploadImage(
     })
 
   if (error) {
-    console.error("[storage] Upload failed:", error.message)
+    console.error("[storage] Upload failed — path:", path, "error:", error.message)
     return null
   }
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  console.log("[storage] Uploaded OK — public url:", data.publicUrl)
   return data.publicUrl
 }

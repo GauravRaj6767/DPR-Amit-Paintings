@@ -14,11 +14,18 @@ export async function downloadMediaBuffer(
   )
 
   if (!metaRes.ok) {
-    console.error("[whatsapp] Failed to resolve media URL:", await metaRes.text())
+    console.error("[whatsapp] Step1 failed — status:", metaRes.status, await metaRes.text())
     return null
   }
 
-  const { url, mime_type } = await metaRes.json() as { url: string; mime_type: string }
+  const metaJson = await metaRes.json() as { url?: string; mime_type?: string }
+  const { url, mime_type } = metaJson
+  console.log("[whatsapp] Step1 resolved — url:", url ? url.slice(0, 60) + "..." : "MISSING", "mime:", mime_type)
+
+  if (!url) {
+    console.error("[whatsapp] No url in media response:", JSON.stringify(metaJson))
+    return null
+  }
 
   // Step 2: Download the actual media bytes
   const mediaRes = await fetch(url, {
@@ -26,7 +33,7 @@ export async function downloadMediaBuffer(
   })
 
   if (!mediaRes.ok) {
-    console.error("[whatsapp] Failed to download media:", mediaRes.status)
+    console.error("[whatsapp] Step2 failed — status:", mediaRes.status, await mediaRes.text())
     return null
   }
 
