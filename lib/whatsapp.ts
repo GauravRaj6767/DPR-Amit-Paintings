@@ -1,0 +1,38 @@
+// Download a media file from Meta's WhatsApp Cloud API
+// media_url stored in message_buffer is actually the WhatsApp media ID
+// We first resolve it to a URL, then download the bytes
+export async function downloadMediaBuffer(
+  mediaId: string
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const token = process.env.WHATSAPP_TOKEN!
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID!
+
+  // Step 1: Get the media URL from the media ID
+  const metaRes = await fetch(
+    `https://graph.facebook.com/v22.0/${mediaId}?phone_number_id=${phoneNumberId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+
+  if (!metaRes.ok) {
+    console.error("[whatsapp] Failed to resolve media URL:", await metaRes.text())
+    return null
+  }
+
+  const { url, mime_type } = await metaRes.json() as { url: string; mime_type: string }
+
+  // Step 2: Download the actual media bytes
+  const mediaRes = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!mediaRes.ok) {
+    console.error("[whatsapp] Failed to download media:", mediaRes.status)
+    return null
+  }
+
+  const arrayBuffer = await mediaRes.arrayBuffer()
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType: mime_type,
+  }
+}
