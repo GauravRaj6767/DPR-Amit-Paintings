@@ -111,3 +111,14 @@ body {
   background: var(--bg-subtle); border: 1px solid var(--border-dim);
   border-radius: 6px; padding: 2px 8px; font-size: 11px; color: var(--text-muted);
 }
+
+/* Skeleton loading */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-subtle) 25%, var(--bg-card-hover) 50%, var(--bg-subtle) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
