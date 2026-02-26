@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
-import type { Site, DailyLog } from "@/types"
+import type { Site } from "@/types"
 import { ThemeToggle } from "@/components/ThemeToggle"
 
 async function getSitesWithStatus() {
@@ -30,9 +30,9 @@ async function getSitesWithStatus() {
     .order("received_at", { ascending: false })
 
   return sites.map((site: Site) => {
-    const siteLogs = (logs ?? []).filter((l: DailyLog) => l.site_id === site.site_id)
+    const siteLogs = (logs ?? []).filter((l) => l.site_id === site.site_id)
     const todayLogs = siteLogs.filter((l) => l.report_date === today)
-    const latestLog: DailyLog | undefined = siteLogs[0]
+    const latestLog = siteLogs[0] as (typeof siteLogs)[0] | undefined
 
     // Build a combined overall summary from all 7-day log summaries (newest first)
     const summaryLines = siteLogs
