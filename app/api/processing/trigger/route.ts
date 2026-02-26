@@ -24,7 +24,7 @@ async function runProcessing(_request: NextRequest) {
   if (!isDev) {
     // Postgres advisory lock — ensures only one instance runs at a time in production.
     // pg_try_advisory_lock returns false immediately if another instance holds the lock.
-    const { data: lockData } = await supabase.rpc("pg_try_advisory_lock", { key: 20260001 })
+    const { data: lockData } = await supabase.rpc("try_processing_lock", { key: 20260001 })
     if (!lockData) {
       console.log("[trigger] Another instance is running, skipping")
       return NextResponse.json({ ok: true, skipped: true })
@@ -33,7 +33,7 @@ async function runProcessing(_request: NextRequest) {
     try {
       return await doProcess(supabase)
     } finally {
-      await supabase.rpc("pg_advisory_unlock", { key: 20260001 })
+      await supabase.rpc("release_processing_lock", { key: 20260001 })
     }
   }
 
