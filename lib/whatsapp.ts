@@ -40,6 +40,6 @@ export async function downloadMediaBuffer(
   const arrayBuffer = await mediaRes.arrayBuffer()
   return {
     buffer: Buffer.from(arrayBuffer),
-    mimeType: mime_type,
+    mimeType: mime_type ?? "image/jpeg",
   }
 }
