@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/processing/trigger",
-      "schedule": "* * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
