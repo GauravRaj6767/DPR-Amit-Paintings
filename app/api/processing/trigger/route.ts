@@ -109,13 +109,20 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
         }
       }
 
-      if (textParts.length === 0) {
+      const hasImages = messages.some((m) => m.message_type === "image" && m.media_url)
+
+      if (textParts.length === 0 && !hasImages) {
         console.warn(`[trigger] No processable content for ${phoneNumber}`)
         await supabase
           .from("message_buffer")
           .delete()
           .in("buffer_id", messages.map((m) => m.buffer_id))
         continue
+      }
+
+      // If there's no text at all, use a placeholder so Gemini can still run
+      if (textParts.length === 0) {
+        textParts.push("[Site progress images attached]")
       }
 
       const combinedText = textParts.join("\n")
