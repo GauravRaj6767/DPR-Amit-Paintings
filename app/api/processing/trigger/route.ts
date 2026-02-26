@@ -124,71 +124,40 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
       // Extract structured data with Gemini
       const extracted = await extractReportData(combinedText)
 
-      // Write to daily_logs — check if a log already exists for today first.
-      // If it does, merge new content rather than overwriting.
+      // Each processing batch creates its own log row (one per supervisor batch per day).
+      // Requires the unique constraint on (site_id, report_date) to be dropped in DB.
       // Use IST date — Vercel runs in UTC, IST is UTC+5:30
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
 
-      const { data: existingLog } = await supabase
+      const { data: logRow, error: insertError } = await supabase
         .from("daily_logs")
-        .select("log_id, raw_combined_text, source_types")
-        .eq("site_id", supervisor.site_id)
-        .eq("report_date", today)
-        .maybeSingle()
-
-      let mergedText = combinedText
-      let mergedSourceTypes = sourceTypes
-
-      if (existingLog) {
-        // Append new content to existing log and re-extract
-        mergedText = [existingLog.raw_combined_text, combinedText].filter(Boolean).join("\n---\n")
-        mergedSourceTypes = [...new Set([...(existingLog.source_types ?? []), ...sourceTypes])]
-        const reExtracted = await extractReportData(mergedText)
-        Object.assign(extracted, reExtracted)
-      }
-
-      const { error: insertError } = await supabase
-        .from("daily_logs")
-        .upsert(
-          {
-            site_id: supervisor.site_id,
-            report_date: today,
-            workers_present: extracted.workers_present,
-            work_done: extracted.work_done,
-            materials_needed: extracted.materials_needed,
-            issues_flagged: extracted.issues_flagged,
-            summary: extracted.summary,
-            raw_combined_text: mergedText,
-            source_types: mergedSourceTypes,
-            received_at: new Date().toISOString(),
-          },
-          { onConflict: "site_id,report_date" }
-        )
+        .insert({
+          site_id: supervisor.site_id,
+          report_date: today,
+          workers_present: extracted.workers_present,
+          work_done: extracted.work_done,
+          materials_needed: extracted.materials_needed,
+          issues_flagged: extracted.issues_flagged,
+          summary: extracted.summary,
+          raw_combined_text: combinedText,
+          source_types: sourceTypes,
+          received_at: new Date().toISOString(),
+        })
+        .select("log_id")
+        .single()
 
       if (insertError) {
         console.error(`[trigger] Failed to insert daily log for ${phoneNumber}:`, insertError.message)
         continue
       }
 
-      // Fetch the log_id we just upserted so we can attach media files
-      const { data: logRow } = await supabase
-        .from("daily_logs")
-        .select("log_id")
-        .eq("site_id", supervisor.site_id)
-        .eq("report_date", today)
-        .single()
-
       // Download and store any images from this batch
       if (logRow?.log_id) {
         const imageMessages = messages.filter((m) => m.message_type === "image" && m.media_url)
         console.log(`[trigger] Found ${imageMessages.length} image(s) for ${phoneNumber}`)
 
-        // Get current max index for this log to avoid overwriting existing images
-        const { data: existingMedia } = await supabase
-          .from("media_files")
-          .select("media_id")
-          .eq("log_id", logRow.log_id)
-        let imgIndex = existingMedia?.length ?? 0
+        // Fresh log — start images at index 0
+        let imgIndex = 0
 
         for (const imgMsg of imageMessages) {
           try {

@@ -28,24 +28,35 @@ async function getSiteData(siteId: string) {
     .select("*")
     .eq("site_id", siteId)
     .gte("report_date", from)
-    .order("report_date", { ascending: false })
+    .order("received_at", { ascending: false })
 
-  // Fetch media files for today's log (if any)
   // Use IST date — server runs in UTC, IST is UTC+5:30
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
-  const todayLog = (logs ?? []).find((l) => l.report_date === today)
-  let todayImages: MediaFile[] = []
-  if (todayLog) {
+  const todayLogs = (logs ?? []).filter((l) => l.report_date === today)
+  const historyLogs = (logs ?? []).filter((l) => l.report_date !== today)
+
+  // Fetch media files for all today's logs
+  const mediaByLog: Record<string, MediaFile[]> = {}
+  if (todayLogs.length > 0) {
+    const todayLogIds = todayLogs.map((l) => l.log_id)
     const { data: mediaFiles } = await supabase
       .from("media_files")
       .select("*")
-      .eq("log_id", todayLog.log_id)
+      .in("log_id", todayLogIds)
       .eq("file_type", "image")
       .order("created_at", { ascending: true })
-    todayImages = (mediaFiles ?? []) as MediaFile[]
+    for (const mf of mediaFiles ?? []) {
+      if (!mediaByLog[mf.log_id]) mediaByLog[mf.log_id] = []
+      mediaByLog[mf.log_id].push(mf as MediaFile)
+    }
   }
 
-  return { site: site as Site, logs: (logs ?? []) as DailyLog[], todayImages }
+  return {
+    site: site as Site,
+    todayLogs: todayLogs as DailyLog[],
+    historyLogs: historyLogs as DailyLog[],
+    mediaByLog,
+  }
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -62,9 +73,11 @@ function InfoRow({ label, value, accent }: { label: string; value: string | null
   )
 }
 
-function TodayCard({ log, images }: { log: DailyLog; images: MediaFile[] }) {
+function BatchCard({ log, images, batchIndex, totalBatches }: { log: DailyLog; images: MediaFile[]; batchIndex: number; totalBatches: number }) {
   const hasIssue = !!log.issues_flagged
-  const hasMaterials = !!log.materials_needed
+  const timeLabel = new Date(log.received_at).toLocaleTimeString("en-IN", {
+    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
+  })
 
   return (
     <div className="card animate-fade-up delay-2" style={{ padding: 24, marginBottom: 10, position: "relative", overflow: "hidden" }}>
@@ -77,17 +90,16 @@ function TodayCard({ log, images }: { log: DailyLog; images: MediaFile[] }) {
       }} />
 
       <div style={{ position: "relative" }}>
+        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 8px rgba(245,166,35,0.6)" }} />
             <span className="font-display" style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Today&apos;s Report
+              {totalBatches > 1 ? `Update ${totalBatches - batchIndex} of ${totalBatches}` : "Today\u2019s Report"}
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              {new Date(log.received_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
-            </span>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{timeLabel}</span>
             <DeleteLogButton logId={log.log_id} label="Remove" />
           </div>
         </div>
@@ -195,10 +207,17 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
   const data = await getSiteData(siteId)
   if (!data) notFound()
 
-  const { site, logs, todayImages } = data
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
-  const todayLog = logs.find((l) => l.report_date === today)
-  const historyLogs = logs.filter((l) => l.report_date !== today)
+  const { site, todayLogs, historyLogs, mediaByLog } = data
+
+  // History: show only the most recent batch per past date
+  const seenDates = new Set<string>()
+  const dedupedHistory: DailyLog[] = []
+  for (const log of historyLogs) {
+    if (!seenDates.has(log.report_date)) {
+      seenDates.add(log.report_date)
+      dedupedHistory.push(log)
+    }
+  }
 
   return (
     <div className="bg-mesh" style={{ minHeight: "100dvh" }}>
@@ -247,10 +266,22 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
           </span>
         </div>
 
-        {todayLog ? <TodayCard log={todayLog} images={todayImages} /> : <NoReportToday />}
+        {todayLogs.length === 0 ? (
+          <NoReportToday />
+        ) : (
+          todayLogs.map((log, i) => (
+            <BatchCard
+              key={log.log_id}
+              log={log}
+              images={mediaByLog[log.log_id] ?? []}
+              batchIndex={i}
+              totalBatches={todayLogs.length}
+            />
+          ))
+        )}
 
         {/* History section */}
-        {historyLogs.length > 0 && (
+        {dedupedHistory.length > 0 && (
           <>
             <div className="animate-fade-in delay-3" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, marginTop: 28 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
@@ -259,14 +290,14 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
               <div className="divider" style={{ flex: 1 }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {historyLogs.map((log, i) => (
+              {dedupedHistory.map((log, i) => (
                 <HistoryRow key={log.log_id} log={log} index={i} />
               ))}
             </div>
           </>
         )}
 
-        {historyLogs.length === 0 && !todayLog && (
+        {dedupedHistory.length === 0 && todayLogs.length === 0 && (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
             <p style={{ fontSize: 13, color: "var(--text-faint)" }}>No reports in the last 7 days</p>
           </div>

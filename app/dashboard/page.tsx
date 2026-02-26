@@ -17,17 +17,20 @@ async function getSitesWithTodayStatus() {
 
   const siteIds = sites.map((s: Site) => s.site_id)
 
+  // Fetch all today's logs — there may be multiple per site (one per batch)
   const { data: logs } = await supabase
     .from("daily_logs")
     .select("*")
     .in("site_id", siteIds)
     .eq("report_date", today)
+    .order("received_at", { ascending: false })
 
   return sites.map((site: Site) => {
-    const log: DailyLog | undefined = (logs ?? []).find(
-      (l: DailyLog) => l.site_id === site.site_id
-    )
-    return { site, log }
+    // Pick the most recent log for this site's card summary
+    const siteLogs = (logs ?? []).filter((l: DailyLog) => l.site_id === site.site_id)
+    const log: DailyLog | undefined = siteLogs[0]
+    const logCount = siteLogs.length
+    return { site, log, logCount }
   })
 }
 
@@ -38,7 +41,7 @@ function StatusDot({ log }: { log: DailyLog | undefined }) {
   return <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px rgba(34,197,94,0.5)" }} />
 }
 
-function SiteCard({ site, log, index }: { site: Site; log: DailyLog | undefined; index: number }) {
+function SiteCard({ site, log, logCount, index }: { site: Site; log: DailyLog | undefined; logCount: number; index: number }) {
   const hasReport = !!log
   const hasIssue = hasReport && !!log.issues_flagged
   const hasMaterials = hasReport && !!log.materials_needed
@@ -74,6 +77,11 @@ function SiteCard({ site, log, index }: { site: Site; log: DailyLog | undefined;
               )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {logCount > 1 && (
+                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-dim)", background: "var(--bg-subtle)", border: "1px solid var(--border-dim)", borderRadius: 99, padding: "2px 7px" }}>
+                  {logCount} updates
+                </span>
+              )}
               <StatusDot log={log} />
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: "var(--text-faint)" }}>
                 <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -199,8 +207,8 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {entries.map(({ site, log }, i) => (
-              <SiteCard key={site.site_id} site={site} log={log} index={i + 3} />
+            {entries.map(({ site, log, logCount }, i) => (
+              <SiteCard key={site.site_id} site={site} log={log} logCount={logCount} index={i + 3} />
             ))}
           </div>
         )}
