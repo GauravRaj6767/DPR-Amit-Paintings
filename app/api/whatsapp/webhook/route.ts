@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { waitUntil } from "@vercel/functions"
 import { upsertBuffer } from "@/lib/buffer"
 
 // GET -- Meta webhook verification challenge
@@ -47,6 +48,18 @@ export async function POST(request: NextRequest) {
       }
     }
   }
+
+  // Fire the processing trigger in the background after a 90-second delay.
+  // This gives the supervisor time to send follow-up messages before processing.
+  // waitUntil keeps the serverless function alive after the response is sent.
+  const triggerUrl = `https://${process.env.VERCEL_URL}/api/processing/trigger`
+  waitUntil(
+    new Promise((resolve) => setTimeout(resolve, 90_000)).then(() =>
+      fetch(triggerUrl, { method: "GET" }).catch((e) =>
+        console.error("[webhook] Background trigger failed:", e)
+      )
+    )
+  )
 
   return NextResponse.json({ ok: true }, { status: 200 })
 }
