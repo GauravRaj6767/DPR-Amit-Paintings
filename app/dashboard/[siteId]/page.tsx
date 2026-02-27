@@ -159,6 +159,9 @@ function HistoryRow({ log, index }: { log: DailyLog; index: number }) {
   const dateLabel = new Date(log.report_date + "T00:00:00").toLocaleDateString("en-IN", {
     weekday: "short", day: "numeric", month: "short",
   })
+  const timeLabel = new Date(log.received_at).toLocaleTimeString("en-IN", {
+    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
+  })
 
   return (
     <div className={`animate-fade-up ${delayClass}`} style={{
@@ -168,6 +171,7 @@ function HistoryRow({ log, index }: { log: DailyLog; index: number }) {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44, paddingTop: 2 }}>
         <div style={{ width: 4, height: 4, borderRadius: "50%", background: hasIssue ? "#ef4444" : hasMaterials ? "#f59e0b" : "#22c55e", marginBottom: 4, boxShadow: `0 0 5px ${hasIssue ? "rgba(239,68,68,0.5)" : hasMaterials ? "rgba(245,158,11,0.5)" : "rgba(34,197,94,0.5)"}` }} />
         <span className="font-display" style={{ fontSize: 11, color: "var(--text-dim)", textAlign: "center", lineHeight: 1.3 }}>{dateLabel}</span>
+        <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "center" }}>{timeLabel}</span>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: log.workers_present != null ? 8 : 0 }}>
@@ -209,15 +213,8 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
 
   const { site, todayLogs, historyLogs, mediaByLog } = data
 
-  // History: show only the most recent batch per past date
-  const seenDates = new Set<string>()
-  const dedupedHistory: DailyLog[] = []
-  for (const log of historyLogs) {
-    if (!seenDates.has(log.report_date)) {
-      seenDates.add(log.report_date)
-      dedupedHistory.push(log)
-    }
-  }
+  // History: show all logs from past days (multiple per date allowed)
+  const dedupedHistory = historyLogs
 
   return (
     <div className="bg-mesh" style={{ minHeight: "100dvh" }}>
