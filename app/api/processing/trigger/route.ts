@@ -42,8 +42,8 @@ async function runProcessing(_request: NextRequest) {
 
 async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
   // Cutoff: process messages where supervisor has been silent for this many minutes
-  // TESTING: set to 1 — PRODUCTION: set back to 30
-  const CUTOFF_MINUTES = 1
+  // Set to 3 so all messages in a burst (text + images sent seconds apart) are grouped together
+  const CUTOFF_MINUTES = 3
   const cutoff = new Date(Date.now() - CUTOFF_MINUTES * 60 * 1000).toISOString()
 
   const { data: rows, error } = await supabase
