@@ -45,7 +45,7 @@ export function ExpandableHistoryRow({ log, index }: { log: DailyLog; index: num
   // Parse voice note transcripts from raw_combined_text
   const transcripts: string[] = []
   if (log.raw_combined_text) {
-    const matches = log.raw_combined_text.matchAll(/\[Voice note\]:\s*(.+?)(?=\n\[|\n[A-Z]|\s*$)/gs)
+    const matches = log.raw_combined_text.matchAll(/\[Voice note\]:\s*([\s\S]+?)(?=\n\[|\n[A-Z]|$)/g)
     for (const match of matches) {
       const t = match[1].trim()
       if (t) transcripts.push(t)
