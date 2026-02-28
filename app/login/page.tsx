@@ -2,12 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -18,11 +16,14 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    })
 
-    if (error) {
-      setError('Invalid email or password.')
+    if (!res.ok) {
+      setError('Invalid password.')
       setLoading(false)
       return
     }
@@ -66,41 +67,13 @@ export default function LoginPage() {
           {/* Card */}
           <div className="card" style={{ padding: '28px 24px' }}>
             <h1 className="font-display" style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-base)', marginBottom: 6, lineHeight: 1.1 }}>
-              Owner Sign In
+              Sign In
             </h1>
             <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 24 }}>
               Access your site dashboard
             </p>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label htmlFor="email" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{
-                    background: 'var(--bg-subtle)',
-                    border: '1px solid var(--border-dim)',
-                    borderRadius: 8,
-                    padding: '10px 12px',
-                    fontSize: 14,
-                    color: 'var(--text-base)',
-                    outline: 'none',
-                    fontFamily: 'DM Sans, sans-serif',
-                    transition: 'border-color 0.2s',
-                    width: '100%',
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-                  onBlur={(e) => (e.target.style.borderColor = 'var(--border-dim)')}
-                />
-              </div>
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label htmlFor="password" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                   Password

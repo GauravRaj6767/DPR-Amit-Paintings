@@ -1,44 +1,23 @@
-import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+const COOKIE_NAME = "dpr_auth"
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  // Refresh session — this silently refreshes expired tokens
-  const { data: { user } } = await supabase.auth.getUser()
-
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const authCookie = request.cookies.get(COOKIE_NAME)
+  const isAuthenticated = authCookie?.value === process.env.DASHBOARD_PASSWORD
 
-  // If not logged in and trying to access a protected route, redirect to login
-  if (!user && pathname.startsWith("/dashboard")) {
+  // If not authenticated and trying to access dashboard, redirect to login
+  if (!isAuthenticated && pathname.startsWith("/dashboard")) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // If already logged in and visiting login page, redirect to dashboard
-  if (user && pathname === "/login") {
+  // If already authenticated and visiting login page, redirect to dashboard
+  if (isAuthenticated && pathname === "/login") {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
-  return supabaseResponse
+  return NextResponse.next()
 }
 
 export const config = {

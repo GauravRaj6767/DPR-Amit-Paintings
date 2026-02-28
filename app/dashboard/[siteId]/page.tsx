@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { Site, DailyLog, MediaFile } from "@/types"
@@ -9,7 +9,7 @@ import { PhotoGrid } from "@/components/PhotoGrid"
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 async function getSiteData(siteId: string) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: site } = await supabase
     .from("sites")

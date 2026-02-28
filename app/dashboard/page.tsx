@@ -1,10 +1,10 @@
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import Link from "next/link"
 import type { Site } from "@/types"
 import { ThemeToggle } from "@/components/ThemeToggle"
 
 async function getSitesWithStatus() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
 
   const sevenDaysAgo = new Date()
