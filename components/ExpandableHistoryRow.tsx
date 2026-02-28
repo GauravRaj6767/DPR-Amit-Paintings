@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { DailyLog, MediaFile } from '@/types'
 import { PhotoGrid } from '@/components/PhotoGrid'
 import { AudioPlayer } from '@/components/AudioPlayer'
+import { DeleteLogButton } from '@/components/DeleteLogButton'
 
 export function ExpandableHistoryRow({ log, index }: { log: DailyLog; index: number }) {
   const hasIssue = !!log.issues_flagged
@@ -187,6 +188,11 @@ export function ExpandableHistoryRow({ log, index }: { log: DailyLog; index: num
           {media !== null && images.length === 0 && audioFiles.length === 0 && videoFiles.length === 0 && (
             <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>No media attachments</p>
           )}
+
+          {/* Delete */}
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-dim)', display: 'flex', justifyContent: 'flex-end' }}>
+            <DeleteLogButton logId={log.log_id} label="Remove report" />
+          </div>
         </div>
       )}
     </div>
