@@ -1,12 +1,16 @@
-import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
 // POST /api/supervisors — add a new supervisor
-export async function POST(req: Request) {
-  const supabase = await createClient()
+export async function POST(req: NextRequest) {
+  const cookieStore = await cookies()
+  const auth = cookieStore.get("dpr_auth")
+  if (auth?.value !== process.env.DASHBOARD_PASSWORD) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const supabase = createAdminClient()
 
   let body: { name?: string; phone_number?: string; site_id?: string }
   try {

@@ -1,16 +1,24 @@
-import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
+
+async function checkAuth() {
+  const cookieStore = await cookies()
+  const auth = cookieStore.get("dpr_auth")
+  return auth?.value === process.env.DASHBOARD_PASSWORD
+}
 
 // PATCH /api/sites/:siteId — update name, location, or is_active
 export async function PATCH(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> }
 ) {
-  const { siteId } = await params
-  const supabase = await createClient()
+  if (!(await checkAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { siteId } = await params
+  const supabase = createAdminClient()
 
   let body: { name?: string; location?: string | null; is_active?: boolean }
   try {
@@ -45,14 +53,15 @@ export async function PATCH(
 
 // DELETE /api/sites/:siteId — permanently delete a site
 export async function DELETE(
-  _req: Request,
+  _req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> }
 ) {
-  const { siteId } = await params
-  const supabase = await createClient()
+  if (!(await checkAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { siteId } = await params
+  const supabase = createAdminClient()
 
   const { error } = await supabase
     .from("sites")

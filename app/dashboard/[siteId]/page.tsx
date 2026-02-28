@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import type { Site, DailyLog, MediaFile } from "@/types"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { DeleteLogButton } from "@/components/DeleteLogButton"
-import { PhotoGrid } from "@/components/PhotoGrid"
+import { BatchCardMedia } from "@/components/BatchCardMedia"
 import { ExpandableHistoryRow } from "@/components/ExpandableHistoryRow"
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -74,7 +74,6 @@ function InfoRow({ label, value, accent }: { label: string; value: string | null
 
 function BatchCard({ log, media, batchIndex, totalBatches }: { log: DailyLog; media: MediaFile[]; batchIndex: number; totalBatches: number }) {
   const hasIssue = !!log.issues_flagged
-  const images = media.filter((m) => m.file_type === "image")
   const timeLabel = new Date(log.received_at).toLocaleTimeString("en-IN", {
     hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
   })
@@ -143,7 +142,7 @@ function BatchCard({ log, media, batchIndex, totalBatches }: { log: DailyLog; me
           </div>
         )}
 
-        <PhotoGrid images={images} />
+        <BatchCardMedia media={media} />
       </div>
     </div>
   )

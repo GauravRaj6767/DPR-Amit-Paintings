@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import Link from "next/link"
 import type { Site, Supervisor } from "@/types"
 import { ThemeToggle } from "@/components/ThemeToggle"
@@ -6,7 +6,7 @@ import { SupervisorManager } from "@/components/settings/SupervisorManager"
 import { SiteManager } from "@/components/settings/SiteManager"
 
 async function getSettingsData() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const [{ data: sites }, { data: supervisors }] = await Promise.all([
     // Fetch ALL sites (active + inactive) for the settings page
