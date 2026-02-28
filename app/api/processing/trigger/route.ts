@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { transcribeAudio, extractReportData } from "@/lib/gemini"
 import { downloadMediaBuffer } from "@/lib/whatsapp"
-import { uploadImage } from "@/lib/storage"
+import { uploadImage, uploadAudio, uploadVideo } from "@/lib/storage"
 
 // GET — called by Vercel cron every minute
 // POST — can be called manually for testing
@@ -17,13 +17,9 @@ export async function POST(request: NextRequest) {
 async function runProcessing(_request: NextRequest) {
   const supabase = createAdminClient()
 
-  // Skip advisory lock in development — dev server restarts drop connections
-  // and leave the lock stuck, causing every subsequent call to be skipped.
   const isDev = process.env.NODE_ENV === "development"
 
   if (!isDev) {
-    // Postgres advisory lock — ensures only one instance runs at a time in production.
-    // pg_try_advisory_lock returns false immediately if another instance holds the lock.
     const { data: lockData } = await supabase.rpc("try_processing_lock", { key: 20260001 })
     if (!lockData) {
       console.log("[trigger] Another instance is running, skipping")
@@ -41,8 +37,6 @@ async function runProcessing(_request: NextRequest) {
 }
 
 async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
-  // Cutoff: process messages where supervisor has been silent for this many minutes
-  // Set to 3 so all messages in a burst (text + images sent seconds apart) are grouped together
   const CUTOFF_MINUTES = 3
   const cutoff = new Date(Date.now() - CUTOFF_MINUTES * 60 * 1000).toISOString()
 
@@ -73,7 +67,6 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
 
   for (const [phoneNumber, messages] of grouped) {
     try {
-      // Look up the supervisor → get site_id
       const { data: supervisor } = await supabase
         .from("supervisors")
         .select("supervisor_id, site_id, name")
@@ -82,7 +75,6 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
 
       if (!supervisor?.site_id) {
         console.warn(`[trigger] No supervisor/site found for ${phoneNumber}, skipping`)
-        // Delete these rows so they don't block future processing
         await supabase
           .from("message_buffer")
           .delete()
@@ -90,28 +82,33 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
         continue
       }
 
-      // Build combined text from all messages
+      // Build combined text — also download + transcribe audio here so transcript is in raw_combined_text
       const textParts: string[] = []
+      // Store downloaded audio buffers to upload after log is created
+      const audioBuffers: Array<{ buffer: Buffer; mimeType: string }> = []
 
       for (const msg of messages) {
         if (msg.message_type === "text" && msg.content) {
           textParts.push(msg.content)
         } else if (msg.message_type === "audio" && msg.media_url) {
-          // Download and transcribe audio
           const media = await downloadMediaBuffer(msg.media_url)
           if (media) {
             const transcript = await transcribeAudio(media.buffer, media.mimeType)
             if (transcript) textParts.push(`[Voice note]: ${transcript}`)
+            audioBuffers.push(media)
           }
         } else if (msg.message_type === "image") {
-          // Use caption if available
           if (msg.content) textParts.push(`[Image caption]: ${msg.content}`)
+        } else if (msg.message_type === "video") {
+          if (msg.content) textParts.push(`[Video caption]: ${msg.content}`)
         }
       }
 
-      const hasImages = messages.some((m) => m.message_type === "image" && m.media_url)
+      const hasMedia = messages.some(
+        (m) => ["image", "audio", "video"].includes(m.message_type) && m.media_url
+      )
 
-      if (textParts.length === 0 && !hasImages) {
+      if (textParts.length === 0 && !hasMedia) {
         console.warn(`[trigger] No processable content for ${phoneNumber}`)
         await supabase
           .from("message_buffer")
@@ -120,20 +117,13 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
         continue
       }
 
-      // If there's no text at all, use a placeholder so Gemini can still run
       if (textParts.length === 0) {
-        textParts.push("[Site progress images attached]")
+        textParts.push("[Site progress media attached]")
       }
 
       const combinedText = textParts.join("\n")
       const sourceTypes = [...new Set(messages.map((m) => m.message_type))]
-
-      // Extract structured data with Gemini
       const extracted = await extractReportData(combinedText)
-
-      // Each processing batch creates its own log row (one per supervisor batch per day).
-      // Requires the unique constraint on (site_id, report_date) to be dropped in DB.
-      // Use IST date — Vercel runs in UTC, IST is UTC+5:30
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
 
       const { data: logRow, error: insertError } = await supabase
@@ -153,44 +143,61 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
         .select("log_id")
         .single()
 
-      if (insertError) {
-        console.error(`[trigger] Failed to insert daily log for ${phoneNumber}:`, insertError.message)
+      if (insertError || !logRow?.log_id) {
+        console.error(`[trigger] Failed to insert daily log for ${phoneNumber}:`, insertError?.message)
         continue
       }
 
-      // Download and store any images from this batch
-      if (logRow?.log_id) {
-        const imageMessages = messages.filter((m) => m.message_type === "image" && m.media_url)
-        console.log(`[trigger] Found ${imageMessages.length} image(s) for ${phoneNumber}`)
+      const logId = logRow.log_id
 
-        // Fresh log — start images at index 0
-        let imgIndex = 0
-
-        for (const imgMsg of imageMessages) {
-          try {
-            console.log(`[trigger] Downloading image media_id=${imgMsg.media_url} for ${phoneNumber}`)
-            const media = await downloadMediaBuffer(imgMsg.media_url)
-            if (!media) {
-              console.warn(`[trigger] downloadMediaBuffer returned null for media_id=${imgMsg.media_url}`)
-              continue
-            }
-            console.log(`[trigger] Downloaded image ${media.mimeType} ${media.buffer.length} bytes, uploading...`)
-            const publicUrl = await uploadImage(media.buffer, media.mimeType, logRow.log_id, imgIndex)
-            if (publicUrl) {
-              await supabase.from("media_files").insert({
-                log_id: logRow.log_id,
-                file_url: publicUrl,
-                file_type: "image",
-                mime_type: media.mimeType,
-              })
-              console.log(`[trigger] Image stored: ${publicUrl}`)
-              imgIndex++
-            } else {
-              console.warn(`[trigger] uploadImage returned null for log_id=${logRow.log_id}`)
-            }
-          } catch (imgErr) {
-            console.error(`[trigger] Failed to process image for ${phoneNumber}:`, imgErr)
+      // Upload images
+      const imageMessages = messages.filter((m) => m.message_type === "image" && m.media_url)
+      console.log(`[trigger] Found ${imageMessages.length} image(s) for ${phoneNumber}`)
+      let imgIndex = 0
+      for (const imgMsg of imageMessages) {
+        try {
+          const media = await downloadMediaBuffer(imgMsg.media_url)
+          if (!media) continue
+          const publicUrl = await uploadImage(media.buffer, media.mimeType, logId, imgIndex)
+          if (publicUrl) {
+            await supabase.from("media_files").insert({ log_id: logId, file_url: publicUrl, file_type: "image", mime_type: media.mimeType })
+            imgIndex++
           }
+        } catch (err) {
+          console.error(`[trigger] Failed to process image for ${phoneNumber}:`, err)
+        }
+      }
+
+      // Upload audio files (already downloaded above for transcription)
+      console.log(`[trigger] Found ${audioBuffers.length} audio file(s) for ${phoneNumber}`)
+      let audioIndex = 0
+      for (const audioBuf of audioBuffers) {
+        try {
+          const publicUrl = await uploadAudio(audioBuf.buffer, audioBuf.mimeType, logId, audioIndex)
+          if (publicUrl) {
+            await supabase.from("media_files").insert({ log_id: logId, file_url: publicUrl, file_type: "audio", mime_type: audioBuf.mimeType })
+            audioIndex++
+          }
+        } catch (err) {
+          console.error(`[trigger] Failed to upload audio for ${phoneNumber}:`, err)
+        }
+      }
+
+      // Upload videos
+      const videoMessages = messages.filter((m) => m.message_type === "video" && m.media_url)
+      console.log(`[trigger] Found ${videoMessages.length} video(s) for ${phoneNumber}`)
+      let videoIndex = 0
+      for (const vidMsg of videoMessages) {
+        try {
+          const media = await downloadMediaBuffer(vidMsg.media_url)
+          if (!media) continue
+          const publicUrl = await uploadVideo(media.buffer, media.mimeType, logId, videoIndex)
+          if (publicUrl) {
+            await supabase.from("media_files").insert({ log_id: logId, file_url: publicUrl, file_type: "video", mime_type: media.mimeType })
+            videoIndex++
+          }
+        } catch (err) {
+          console.error(`[trigger] Failed to process video for ${phoneNumber}:`, err)
         }
       }
 
@@ -209,4 +216,3 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
 
   return NextResponse.json({ ok: true, processed })
 }
-

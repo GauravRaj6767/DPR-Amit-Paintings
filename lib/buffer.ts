@@ -7,7 +7,7 @@ import type { WhatsAppMessage } from "@/app/api/whatsapp/webhook/route"
 export async function upsertBuffer(msg: WhatsAppMessage, _displayName: string) {
   const supabase = createAdminClient()
 
-  let messageType: "text" | "audio" | "image"
+  let messageType: "text" | "audio" | "image" | "video"
   let content: string | null = null
   let mediaUrl: string | null = null
   let mediaMime: string | null = null
@@ -24,6 +24,11 @@ export async function upsertBuffer(msg: WhatsAppMessage, _displayName: string) {
     mediaUrl = msg.image?.id ?? null
     mediaMime = msg.image?.mime_type ?? null
     content = msg.image?.caption ?? null
+  } else if (msg.type === "video") {
+    messageType = "video"
+    mediaUrl = msg.video?.id ?? null
+    mediaMime = msg.video?.mime_type ?? null
+    content = msg.video?.caption ?? null
   } else {
     // Unsupported message type (location, sticker, etc.) -- ignore
     return

@@ -5,6 +5,7 @@ import type { Site, DailyLog, MediaFile } from "@/types"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { DeleteLogButton } from "@/components/DeleteLogButton"
 import { PhotoGrid } from "@/components/PhotoGrid"
+import { ExpandableHistoryRow } from "@/components/ExpandableHistoryRow"
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -30,12 +31,11 @@ async function getSiteData(siteId: string) {
     .gte("report_date", from)
     .order("received_at", { ascending: false })
 
-  // Use IST date — server runs in UTC, IST is UTC+5:30
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
   const todayLogs = (logs ?? []).filter((l) => l.report_date === today)
   const historyLogs = (logs ?? []).filter((l) => l.report_date !== today)
 
-  // Fetch media files for all today's logs
+  // Fetch ALL media (images + audio + video) for today's logs
   const mediaByLog: Record<string, MediaFile[]> = {}
   if (todayLogs.length > 0) {
     const todayLogIds = todayLogs.map((l) => l.log_id)
@@ -43,7 +43,6 @@ async function getSiteData(siteId: string) {
       .from("media_files")
       .select("*")
       .in("log_id", todayLogIds)
-      .eq("file_type", "image")
       .order("created_at", { ascending: true })
     for (const mf of mediaFiles ?? []) {
       if (!mediaByLog[mf.log_id]) mediaByLog[mf.log_id] = []
@@ -73,15 +72,15 @@ function InfoRow({ label, value, accent }: { label: string; value: string | null
   )
 }
 
-function BatchCard({ log, images, batchIndex, totalBatches }: { log: DailyLog; images: MediaFile[]; batchIndex: number; totalBatches: number }) {
+function BatchCard({ log, media, batchIndex, totalBatches }: { log: DailyLog; media: MediaFile[]; batchIndex: number; totalBatches: number }) {
   const hasIssue = !!log.issues_flagged
+  const images = media.filter((m) => m.file_type === "image")
   const timeLabel = new Date(log.received_at).toLocaleTimeString("en-IN", {
     hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
   })
 
   return (
     <div className="card animate-fade-up delay-2" style={{ padding: 24, marginBottom: 10, position: "relative", overflow: "hidden" }}>
-      {/* Glow bg */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none",
         background: hasIssue
@@ -90,7 +89,6 @@ function BatchCard({ log, images, batchIndex, totalBatches }: { log: DailyLog; i
       }} />
 
       <div style={{ position: "relative" }}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 8px rgba(245,166,35,0.6)" }} />
@@ -151,47 +149,6 @@ function BatchCard({ log, images, batchIndex, totalBatches }: { log: DailyLog; i
   )
 }
 
-function HistoryRow({ log, index }: { log: DailyLog; index: number }) {
-  const hasIssue = !!log.issues_flagged
-  const hasMaterials = !!log.materials_needed
-  const delayClass = `delay-${Math.min(index + 3, 7)}`
-
-  const dateLabel = new Date(log.report_date + "T00:00:00").toLocaleDateString("en-IN", {
-    weekday: "short", day: "numeric", month: "short",
-  })
-  const timeLabel = new Date(log.received_at).toLocaleTimeString("en-IN", {
-    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
-  })
-
-  return (
-    <div className={`animate-fade-up ${delayClass}`} style={{
-      background: "var(--bg-card)", border: "1px solid var(--border-dim)", borderRadius: 10,
-      padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 14,
-    }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44, paddingTop: 2 }}>
-        <div style={{ width: 4, height: 4, borderRadius: "50%", background: hasIssue ? "#ef4444" : hasMaterials ? "#f59e0b" : "#22c55e", marginBottom: 4, boxShadow: `0 0 5px ${hasIssue ? "rgba(239,68,68,0.5)" : hasMaterials ? "rgba(245,158,11,0.5)" : "rgba(34,197,94,0.5)"}` }} />
-        <span className="font-display" style={{ fontSize: 11, color: "var(--text-dim)", textAlign: "center", lineHeight: 1.3 }}>{dateLabel}</span>
-        <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "center" }}>{timeLabel}</span>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: log.workers_present != null ? 8 : 0 }}>
-          {log.summary ?? log.work_done ?? "Report received"}
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-          {log.workers_present != null && (
-            <span className="badge badge-neutral" style={{ fontSize: 10, padding: "2px 8px" }}>👷 {log.workers_present}</span>
-          )}
-          {hasIssue && <span className="badge badge-issue" style={{ fontSize: 10, padding: "2px 8px" }}>⚠ Issue</span>}
-          {hasMaterials && <span className="badge badge-warn" style={{ fontSize: 10, padding: "2px 8px" }}>◈ Materials</span>}
-        </div>
-      </div>
-      <div style={{ flexShrink: 0, paddingTop: 2 }}>
-        <DeleteLogButton logId={log.log_id} />
-      </div>
-    </div>
-  )
-}
-
 function NoReportToday() {
   return (
     <div className="card animate-fade-up delay-2" style={{ padding: "32px 24px", textAlign: "center", marginBottom: 10 }}>
@@ -212,9 +169,6 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
   if (!data) notFound()
 
   const { site, todayLogs, historyLogs, mediaByLog } = data
-
-  // History: show all logs from past days (multiple per date allowed)
-  const dedupedHistory = historyLogs
 
   return (
     <div className="bg-mesh" style={{ minHeight: "100dvh" }}>
@@ -270,7 +224,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
             <BatchCard
               key={log.log_id}
               log={log}
-              images={mediaByLog[log.log_id] ?? []}
+              media={mediaByLog[log.log_id] ?? []}
               batchIndex={i}
               totalBatches={todayLogs.length}
             />
@@ -278,7 +232,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
         )}
 
         {/* History section */}
-        {dedupedHistory.length > 0 && (
+        {historyLogs.length > 0 && (
           <>
             <div className="animate-fade-in delay-3" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, marginTop: 28 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
@@ -287,14 +241,14 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
               <div className="divider" style={{ flex: 1 }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {dedupedHistory.map((log, i) => (
-                <HistoryRow key={log.log_id} log={log} index={i} />
+              {historyLogs.map((log, i) => (
+                <ExpandableHistoryRow key={log.log_id} log={log} index={i} />
               ))}
             </div>
           </>
         )}
 
-        {dedupedHistory.length === 0 && todayLogs.length === 0 && (
+        {historyLogs.length === 0 && todayLogs.length === 0 && (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
             <p style={{ fontSize: 13, color: "var(--text-faint)" }}>No reports in the last 7 days</p>
           </div>

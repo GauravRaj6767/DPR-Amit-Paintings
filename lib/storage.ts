@@ -1,33 +1,44 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 
-const BUCKET = "report-images"
+const IMAGE_BUCKET = "report-images"
+const AUDIO_BUCKET = "report-audio"
+const VIDEO_BUCKET = "report-videos"
 
-// Upload an image buffer to Supabase Storage.
-// Returns the public URL, or null on failure.
-export async function uploadImage(
+async function uploadToStorage(
+  bucket: string,
   buffer: Buffer,
   mimeType: string,
   logId: string,
-  index: number
+  index: number,
+  label: string
 ): Promise<string | null> {
   const supabase = createAdminClient()
 
-  const ext = mimeType.split("/")[1]?.split(";")[0] ?? "jpg"
+  const ext = mimeType.split("/")[1]?.split(";")[0] ?? "bin"
   const path = `${logId}/${index}.${ext}`
 
   const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, buffer, {
-      contentType: mimeType,
-      upsert: true,
-    })
+    .from(bucket)
+    .upload(path, buffer, { contentType: mimeType, upsert: true })
 
   if (error) {
-    console.error("[storage] Upload failed — path:", path, "error:", error.message)
+    console.error(`[storage] ${label} upload failed — path:`, path, "error:", error.message)
     return null
   }
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-  console.log("[storage] Uploaded OK — public url:", data.publicUrl)
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+  console.log(`[storage] ${label} uploaded OK — public url:`, data.publicUrl)
   return data.publicUrl
+}
+
+export function uploadImage(buffer: Buffer, mimeType: string, logId: string, index: number) {
+  return uploadToStorage(IMAGE_BUCKET, buffer, mimeType, logId, index, "Image")
+}
+
+export function uploadAudio(buffer: Buffer, mimeType: string, logId: string, index: number) {
+  return uploadToStorage(AUDIO_BUCKET, buffer, mimeType, logId, index, "Audio")
+}
+
+export function uploadVideo(buffer: Buffer, mimeType: string, logId: string, index: number) {
+  return uploadToStorage(VIDEO_BUCKET, buffer, mimeType, logId, index, "Video")
 }

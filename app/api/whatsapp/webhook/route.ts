@@ -72,8 +72,9 @@ export type WhatsAppMessage = {
   from: string
   id: string
   timestamp: string
-  type: "text" | "audio" | "image" | string
+  type: "text" | "audio" | "image" | "video" | string
   text?: { body: string }
   audio?: { id: string; mime_type: string }
   image?: { id: string; mime_type: string; caption?: string }
+  video?: { id: string; mime_type: string; caption?: string }
 }

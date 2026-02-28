@@ -40,19 +40,21 @@ async function getSitesWithStatus() {
       .filter(Boolean) as string[]
     const overallSummary = summaryLines.length > 0 ? summaryLines.join(" · ") : null
 
-    // Status flags: check across all today's logs
-    const hasIssueToday = todayLogs.some((l) => !!l.issues_flagged)
-    const hasMaterialsToday = todayLogs.some((l) => !!l.materials_needed)
+    // Status flags: aggregate across all 7-day logs for a true health summary
+    const hasIssue7d = siteLogs.some((l) => !!l.issues_flagged)
+    const hasMaterials7d = siteLogs.some((l) => !!l.materials_needed)
     const workersToday = todayLogs.find((l) => l.workers_present != null)?.workers_present ?? null
+    const reportedToday = todayLogs.length > 0
 
     return {
       site,
       latestLog,
       todayCount: todayLogs.length,
       overallSummary,
-      hasIssueToday,
-      hasMaterialsToday,
+      hasIssue7d,
+      hasMaterials7d,
       workersToday,
+      reportedToday,
     }
   })
 }
@@ -67,7 +69,7 @@ function StatusDot({ hasIssue, hasMaterials, hasReport }: { hasIssue: boolean; h
 }
 
 function SiteCard({ entry, index }: { entry: SiteEntry; index: number }) {
-  const { site, latestLog, todayCount, overallSummary, hasIssueToday, hasMaterialsToday, workersToday } = entry
+  const { site, latestLog, todayCount, overallSummary, hasIssue7d, hasMaterials7d, workersToday, reportedToday } = entry
   const hasReport = !!latestLog
   const delayClass = `delay-${Math.min(index, 7)}`
 
@@ -77,9 +79,9 @@ function SiteCard({ entry, index }: { entry: SiteEntry; index: number }) {
         <div style={{
           position: "absolute", left: 0, top: 0, bottom: 0, width: 3,
           borderRadius: "14px 0 0 14px",
-          background: hasIssueToday
+          background: hasIssue7d
             ? "linear-gradient(180deg,#ef4444,#dc2626)"
-            : hasMaterialsToday
+            : hasMaterials7d
             ? "linear-gradient(180deg,#f59e0b,#d97706)"
             : hasReport
             ? "linear-gradient(180deg,#22c55e,#16a34a)"
@@ -106,7 +108,7 @@ function SiteCard({ entry, index }: { entry: SiteEntry; index: number }) {
                   {todayCount} updates
                 </span>
               )}
-              <StatusDot hasIssue={hasIssueToday} hasMaterials={hasMaterialsToday} hasReport={hasReport} />
+              <StatusDot hasIssue={hasIssue7d} hasMaterials={hasMaterials7d} hasReport={hasReport} />
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: "var(--text-faint)" }}>
                 <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -120,17 +122,16 @@ function SiteCard({ entry, index }: { entry: SiteEntry; index: number }) {
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {workersToday != null && (
-                  <span className="badge badge-neutral">
-                    👷 {workersToday} workers
-                  </span>
+                  <span className="badge badge-neutral">👷 {workersToday} workers</span>
                 )}
-                {hasIssueToday && <span className="badge badge-issue">⚠ Issue flagged</span>}
-                {hasMaterialsToday && <span className="badge badge-warn">◈ Materials needed</span>}
-                {!hasIssueToday && !hasMaterialsToday && <span className="badge badge-ok">✓ All clear</span>}
+                {!reportedToday && <span className="badge badge-neutral">— No report today</span>}
+                {hasIssue7d && <span className="badge badge-issue">⚠ Issue flagged</span>}
+                {hasMaterials7d && <span className="badge badge-warn">◈ Materials needed</span>}
+                {!hasIssue7d && !hasMaterials7d && <span className="badge badge-ok">✓ All clear</span>}
               </div>
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic" }}>No report received today</p>
+            <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic" }}>No reports in the last 7 days</p>
           )}
         </div>
       </div>
@@ -143,8 +144,8 @@ export default async function DashboardPage() {
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata",
   })
-  const reportsToday = entries.filter((e) => !!e.latestLog).length
-  const issuesCount = entries.filter((e) => e.hasIssueToday).length
+  const reportsToday = entries.filter((e) => e.reportedToday).length
+  const issuesCount = entries.filter((e) => e.hasIssue7d).length
 
   return (
     <div className="bg-mesh" style={{ minHeight: "100dvh" }}>
