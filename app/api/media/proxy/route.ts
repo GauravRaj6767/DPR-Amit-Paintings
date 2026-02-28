@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 // Proxy Supabase storage files through Vercel to bypass ISP-level blocks
-// on *.supabase.co (e.g. Jio/Airtel DNS blocking in India)
+// on *.supabase.co (e.g. Jio/Airtel DNS blocking in India).
+// Forwards Range headers so audio/video seeking works correctly.
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get("url")
 
@@ -23,20 +24,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const upstream = await fetch(url, { cache: "force-cache" })
+  // Forward Range header if present (needed for audio/video seeking)
+  const upstreamHeaders: HeadersInit = {}
+  const range = request.headers.get("range")
+  if (range) upstreamHeaders["Range"] = range
 
-  if (!upstream.ok) {
+  const upstream = await fetch(url, {
+    headers: upstreamHeaders,
+    // Don't cache range requests — only cache full responses
+    cache: range ? "no-store" : "force-cache",
+  })
+
+  if (!upstream.ok && upstream.status !== 206) {
     return NextResponse.json({ error: "Upstream error" }, { status: upstream.status })
   }
 
   const contentType = upstream.headers.get("content-type") ?? "application/octet-stream"
-  const body = await upstream.arrayBuffer()
+  const contentLength = upstream.headers.get("content-length")
+  const contentRange = upstream.headers.get("content-range")
+  const acceptRanges = upstream.headers.get("accept-ranges")
 
-  return new NextResponse(body, {
-    status: 200,
-    headers: {
-      "Content-Type": contentType,
-      "Cache-Control": "public, max-age=86400, immutable",
-    },
+  const responseHeaders: Record<string, string> = {
+    "Content-Type": contentType,
+    "Cache-Control": range ? "no-store" : "public, max-age=86400, immutable",
+  }
+  if (contentLength) responseHeaders["Content-Length"] = contentLength
+  if (contentRange) responseHeaders["Content-Range"] = contentRange
+  if (acceptRanges) responseHeaders["Accept-Ranges"] = acceptRanges
+
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
   })
 }
