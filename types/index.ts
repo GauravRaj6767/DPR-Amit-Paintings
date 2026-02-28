@@ -18,7 +18,7 @@ export type Supervisor = {
 export type MessageBuffer = {
   buffer_id: string
   phone_number: string
-  message_type: 'text' | 'audio' | 'image'
+  message_type: 'text' | 'audio' | 'image' | 'video'
   content: string | null
   media_url: string | null
   media_mime: string | null
@@ -45,7 +45,7 @@ export type MediaFile = {
   media_id: string
   log_id: string
   file_url: string
-  file_type: 'image' | 'audio'
+  file_type: 'image' | 'audio' | 'video'
   mime_type: string | null
   created_at: string
 }
