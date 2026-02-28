@@ -1,6 +1,7 @@
 'use client'
 
 import type { MediaFile } from "@/types"
+import { proxyUrl } from "@/lib/mediaUrl"
 
 export function PhotoGrid({ images }: { images: MediaFile[] }) {
   if (images.length === 0) return null
@@ -30,14 +31,14 @@ export function PhotoGrid({ images }: { images: MediaFile[] }) {
         {images.map((img) => (
           <a
             key={img.media_id}
-            href={img.file_url}
+            href={proxyUrl(img.file_url)}
             target="_blank"
             rel="noopener noreferrer"
             className="photo-thumb"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={img.file_url}
+              src={proxyUrl(img.file_url)}
               alt="Site photo"
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               onError={(e) => {

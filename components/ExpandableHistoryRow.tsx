@@ -5,6 +5,7 @@ import type { DailyLog, MediaFile } from '@/types'
 import { PhotoGrid } from '@/components/PhotoGrid'
 import { AudioPlayer } from '@/components/AudioPlayer'
 import { DeleteLogButton } from '@/components/DeleteLogButton'
+import { proxyUrl } from '@/lib/mediaUrl'
 
 export function ExpandableHistoryRow({ log, index }: { log: DailyLog; index: number }) {
   const hasIssue = !!log.issues_flagged
@@ -156,7 +157,7 @@ export function ExpandableHistoryRow({ log, index }: { log: DailyLog; index: num
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {audioFiles.map((a, i) => (
-                  <AudioPlayer key={a.media_id} src={a.file_url} index={i} />
+                  <AudioPlayer key={a.media_id} src={proxyUrl(a.file_url)} index={i} />
                 ))}
               </div>
             </div>
@@ -175,7 +176,7 @@ export function ExpandableHistoryRow({ log, index }: { log: DailyLog; index: num
                 {videoFiles.map((v) => (
                   <video
                     key={v.media_id}
-                    src={v.file_url}
+                    src={proxyUrl(v.file_url)}
                     controls
                     style={{ width: '100%', borderRadius: 8, background: '#000' }}
                   />

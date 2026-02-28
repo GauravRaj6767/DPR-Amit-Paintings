@@ -3,6 +3,7 @@
 import type { MediaFile } from '@/types'
 import { AudioPlayer } from '@/components/AudioPlayer'
 import { PhotoGrid } from '@/components/PhotoGrid'
+import { proxyUrl } from '@/lib/mediaUrl'
 
 export function BatchCardMedia({ media }: { media: MediaFile[] }) {
   const images = media.filter((m) => m.file_type === 'image')
@@ -20,7 +21,7 @@ export function BatchCardMedia({ media }: { media: MediaFile[] }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {audioFiles.map((a, i) => (
-              <AudioPlayer key={a.media_id} src={a.file_url} index={i} />
+              <AudioPlayer key={a.media_id} src={proxyUrl(a.file_url)} index={i} />
             ))}
           </div>
         </div>
@@ -37,7 +38,7 @@ export function BatchCardMedia({ media }: { media: MediaFile[] }) {
             {videoFiles.map((v) => (
               <video
                 key={v.media_id}
-                src={v.file_url}
+                src={proxyUrl(v.file_url)}
                 controls
                 style={{ width: '100%', borderRadius: 8, background: '#000' }}
               />
