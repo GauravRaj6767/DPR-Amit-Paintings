@@ -20,16 +20,12 @@ async function getSiteData(siteId: string) {
 
   if (!site) return null
 
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-  const from = sevenDaysAgo.toISOString().split("T")[0]
-
   const { data: logs } = await supabase
     .from("daily_logs")
     .select("*")
     .eq("site_id", siteId)
-    .gte("report_date", from)
     .order("received_at", { ascending: false })
+    .limit(10)
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
   const todayLogs = (logs ?? []).filter((l) => l.report_date === today)
@@ -235,7 +231,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
           <>
             <div className="animate-fade-in delay-3" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, marginTop: 28 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-                Past 7 Days
+                Last 10 Reports
               </span>
               <div className="divider" style={{ flex: 1 }} />
             </div>
@@ -249,7 +245,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ sit
 
         {historyLogs.length === 0 && todayLogs.length === 0 && (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <p style={{ fontSize: 13, color: "var(--text-faint)" }}>No reports in the last 7 days</p>
+            <p style={{ fontSize: 13, color: "var(--text-faint)" }}>No reports found</p>
           </div>
         )}
       </div>

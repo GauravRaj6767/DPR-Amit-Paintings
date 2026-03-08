@@ -7,10 +7,6 @@ async function getSitesWithStatus() {
   const supabase = createAdminClient()
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
 
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-  const from = sevenDaysAgo.toISOString().split("T")[0]
-
   const { data: sites } = await supabase
     .from("sites")
     .select("*")
@@ -21,26 +17,27 @@ async function getSitesWithStatus() {
 
   const siteIds = sites.map((s: Site) => s.site_id)
 
-  // Fetch last 7 days of logs for all sites — multiple rows per day are possible
+  // Fetch last 10 logs for all sites — multiple rows per day are possible
   const { data: logs } = await supabase
     .from("daily_logs")
     .select("site_id, report_date, received_at, summary, work_done, workers_present, issues_flagged, materials_needed")
     .in("site_id", siteIds)
-    .gte("report_date", from)
     .order("received_at", { ascending: false })
+    .limit(siteIds.length * 10)
 
   return sites.map((site: Site) => {
-    const siteLogs = (logs ?? []).filter((l) => l.site_id === site.site_id)
+    const allSiteLogs = (logs ?? []).filter((l) => l.site_id === site.site_id)
+    const siteLogs = allSiteLogs.slice(0, 10)
     const todayLogs = siteLogs.filter((l) => l.report_date === today)
     const latestLog = siteLogs[0] as (typeof siteLogs)[0] | undefined
 
-    // Build a combined overall summary from all 7-day log summaries (newest first)
+    // Build a combined overall summary from last 10 log summaries (newest first)
     const summaryLines = siteLogs
       .map((l) => l.summary ?? l.work_done)
       .filter(Boolean) as string[]
     const overallSummary = summaryLines.length > 0 ? summaryLines.join(" · ") : null
 
-    // Status flags: aggregate across all 7-day logs for a true health summary
+    // Status flags: aggregate across last 10 logs for a true health summary
     const hasIssue7d = siteLogs.some((l) => !!l.issues_flagged)
     const hasMaterials7d = siteLogs.some((l) => !!l.materials_needed)
     const workersToday = todayLogs.find((l) => l.workers_present != null)?.workers_present ?? null
@@ -131,7 +128,7 @@ function SiteCard({ entry, index }: { entry: SiteEntry; index: number }) {
               </div>
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic" }}>No reports in the last 7 days</p>
+            <p style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic" }}>No reports found</p>
           )}
         </div>
       </div>
