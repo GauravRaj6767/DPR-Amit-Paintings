@@ -4,7 +4,7 @@ import { transcribeAudio, extractReportData } from "@/lib/gemini"
 import { downloadMediaBuffer, sendWhatsAppMessage } from "@/lib/whatsapp"
 import { uploadImage, uploadAudio, uploadVideo } from "@/lib/storage"
 
-// GET — called by Vercel cron every minute
+// GET — called by Supabase pg_cron every minute
 // POST — can be called manually for testing
 export async function GET(request: NextRequest) {
   return runProcessing(request)
