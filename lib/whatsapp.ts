@@ -1,3 +1,30 @@
+// Send a text message via WhatsApp Cloud API
+export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
+  const token = process.env.WHATSAPP_TOKEN!
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID!
+
+  const res = await fetch(
+    `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: text },
+      }),
+    }
+  )
+
+  if (!res.ok) {
+    console.error("[whatsapp] Failed to send message — status:", res.status, await res.text())
+  }
+}
+
 // Download a media file from Meta's WhatsApp Cloud API
 // media_url stored in message_buffer is actually the WhatsApp media ID
 // We first resolve it to a URL, then download the bytes

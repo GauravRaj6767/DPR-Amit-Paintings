@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { sendWhatsAppMessage } from "@/lib/whatsapp"
 import type { WhatsAppMessage } from "@/app/api/whatsapp/webhook/route"
 
 // Upsert a message into the buffer table.
@@ -46,5 +47,12 @@ export async function upsertBuffer(msg: WhatsAppMessage, _displayName: string) {
 
   if (error) {
     console.error("[buffer] Failed to insert message:", error.message)
+    return
   }
+
+  // Send confirmation back to the supervisor
+  await sendWhatsAppMessage(
+    msg.from,
+    "✅ Response received! Your update will be processed shortly."
+  )
 }

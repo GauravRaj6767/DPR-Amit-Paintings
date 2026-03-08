@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { transcribeAudio, extractReportData } from "@/lib/gemini"
-import { downloadMediaBuffer } from "@/lib/whatsapp"
+import { downloadMediaBuffer, sendWhatsAppMessage } from "@/lib/whatsapp"
 import { uploadImage, uploadAudio, uploadVideo } from "@/lib/storage"
 
 // GET — called by Vercel cron every minute
@@ -69,7 +69,7 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
     try {
       const { data: supervisor } = await supabase
         .from("supervisors")
-        .select("supervisor_id, site_id, name")
+        .select("supervisor_id, site_id, name, sites(name)")
         .eq("phone_number", phoneNumber)
         .single()
 
@@ -206,6 +206,19 @@ async function doProcess(supabase: ReturnType<typeof createAdminClient>) {
         .from("message_buffer")
         .delete()
         .in("buffer_id", messages.map((m) => m.buffer_id))
+
+      // Notify owner on WhatsApp
+      const ownerNumber = process.env.OWNER_WHATSAPP_NUMBER
+      if (ownerNumber) {
+        const sitesData = supervisor.sites as { name: string }[] | { name: string } | null
+        const siteName = (Array.isArray(sitesData) ? sitesData[0]?.name : sitesData?.name) ?? "Unknown site"
+        const lines: string[] = [`📋 *New Report — ${siteName}*`]
+        if (extracted.workers_present != null) lines.push(`👷 Workers: ${extracted.workers_present}`)
+        if (extracted.work_done) lines.push(`🔨 Work done: ${extracted.work_done}`)
+        if (extracted.materials_needed) lines.push(`📦 Materials needed: ${extracted.materials_needed}`)
+        if (extracted.issues_flagged) lines.push(`⚠️ Issue: ${extracted.issues_flagged}`)
+        await sendWhatsAppMessage(ownerNumber, lines.join("\n"))
+      }
 
       console.log(`[trigger] Processed ${messages.length} messages for ${phoneNumber}`)
       processed++

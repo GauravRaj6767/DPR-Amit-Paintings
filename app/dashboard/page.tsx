@@ -31,11 +31,8 @@ async function getSitesWithStatus() {
     const todayLogs = siteLogs.filter((l) => l.report_date === today)
     const latestLog = siteLogs[0] as (typeof siteLogs)[0] | undefined
 
-    // Build a combined overall summary from last 10 log summaries (newest first)
-    const summaryLines = siteLogs
-      .map((l) => l.summary ?? l.work_done)
-      .filter(Boolean) as string[]
-    const overallSummary = summaryLines.length > 0 ? summaryLines.join(" · ") : null
+    // Use the latest log's summary for the card
+    const overallSummary = (latestLog?.summary ?? latestLog?.work_done) ?? null
 
     // Status flags: aggregate across last 10 logs for a true health summary
     const hasIssue7d = siteLogs.some((l) => !!l.issues_flagged)
